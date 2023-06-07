@@ -14,6 +14,17 @@ class Project {
   ) {}
 }
 
+interface Draggable {
+  dragStartHandler(event: DragEvent): void;
+  dragEndHandler(event: DragEvent): void;
+}
+
+interface DragTarget {
+  dragOverHandler(event: DragEvent): void;
+  dropHander(event: DragEvent): void;
+  dragLeaveHander(event: DragEvent): void;
+}
+
 // Project State Management
 type Listener<T> = (items: T[]) => void;
 
@@ -50,8 +61,20 @@ class ProjectState extends State<Project> {
       ProjectStatus.Active
     );
     this.projects.push(newProject);
+    this.updateListener();
+  }
+
+  private updateListener() {
     for (const listenerFn of this.listeners) {
       listenerFn(this.projects.slice());
+    }
+  }
+
+  moveProject(id: string, newStatus: ProjectStatus) {
+    const result = this.projects.find((item) => item.id === id);
+    if (result && result.status !== newStatus) {
+      result.status = newStatus;
+      this.updateListener();
     }
   }
 }
@@ -116,6 +139,17 @@ function autobind(_: any, _2: string, descriptor: PropertyDescriptor) {
 }
 
 // Component Base Class
+
+/**
+ * 组件类模板
+ * @date 2023/6/7 - 18:39:56
+ *
+ * @abstract
+ * @class Component
+ * @typedef {Component}
+ * @template T host element 的泛型
+ * @template U element 的泛型
+ */
 abstract class Component<T extends HTMLElement, U extends HTMLElement> {
   templateElement: HTMLTemplateElement;
   hostElement: T;
@@ -156,7 +190,10 @@ abstract class Component<T extends HTMLElement, U extends HTMLElement> {
 }
 
 // ProjectItem Class
-class ProjectItem extends Component<HTMLUListElement, HTMLLIElement> {
+class ProjectItem
+  extends Component<HTMLUListElement, HTMLLIElement>
+  implements Draggable
+{
   private project: Project;
 
   get persons() {
@@ -175,7 +212,20 @@ class ProjectItem extends Component<HTMLUListElement, HTMLLIElement> {
     this.renderContent();
   }
 
-  configure() {}
+  @autobind
+  dragStartHandler(event: DragEvent): void {
+    event.dataTransfer!.setData("text/plain", this.project.id);
+    event.dataTransfer!.effectAllowed = "move";
+  }
+  @autobind
+  dragEndHandler(event: DragEvent): void {
+    console.log(event);
+  }
+
+  configure() {
+    this.element.addEventListener("dragstart", this.dragStartHandler);
+    this.element.addEventListener("dragend", this.dragEndHandler);
+  }
 
   renderContent() {
     this.element.querySelector("h2")!.textContent = this.project.title;
@@ -185,7 +235,10 @@ class ProjectItem extends Component<HTMLUListElement, HTMLLIElement> {
 }
 
 // ProjectList Class
-class ProjectList extends Component<HTMLDivElement, HTMLElement> {
+class ProjectList
+  extends Component<HTMLDivElement, HTMLElement>
+  implements DragTarget
+{
   assignedProjects: Project[];
 
   constructor(private type: "active" | "finished") {
@@ -195,8 +248,33 @@ class ProjectList extends Component<HTMLDivElement, HTMLElement> {
     this.configure();
     this.renderContent();
   }
+  @autobind
+  dragOverHandler(event: DragEvent): void {
+    if (event.dataTransfer && event.dataTransfer.types[0] === "text/plain") {
+      event.preventDefault();
+      const listEl = this.element.querySelector("ul");
+      listEl?.classList.add("droppable");
+    }
+  }
+  @autobind
+  dropHander(event: DragEvent): void {
+    const prjId = event.dataTransfer!.getData("text/plain");
+    projectState.moveProject(
+      prjId,
+      this.type === "active" ? ProjectStatus.Active : ProjectStatus.Finished
+    );
+  }
+  @autobind
+  dragLeaveHander(event: DragEvent): void {
+    const listEl = this.element.querySelector("ul");
+    listEl?.classList.remove("droppable");
+  }
 
   configure() {
+    this.element.addEventListener("dragover", this.dragOverHandler);
+    this.element.addEventListener("drop", this.dropHander);
+    this.element.addEventListener("dragleave", this.dragLeaveHander);
+
     projectState.addListener((projects: Project[]) => {
       const relevantProjects = projects.filter((prj) => {
         if (this.type === "active") {
