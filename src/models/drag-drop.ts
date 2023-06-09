@@ -1,0 +1,13 @@
+// Drag & Drop Interfaces
+
+
+export interface Draggable {
+  dragStartHandler(event: DragEvent): void;
+  dragEndHandler(event: DragEvent): void;
+}
+
+export interface DragTarget {
+  dragOverHandler(event: DragEvent): void;
+  dropHander(event: DragEvent): void;
+  dragLeaveHander(event: DragEvent): void;
+}
